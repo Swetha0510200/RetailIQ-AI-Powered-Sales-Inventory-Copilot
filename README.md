@@ -8,6 +8,10 @@ RetailIQ is an enterprise-grade AI copilot and executive analytics platform for 
 
 ---
 
+DEMO LINK
+
+https://drive.google.com/file/d/1QFGZlAkInaD1gcW_XuY1iS-b-6CJU76P/view?usp=sharing
+
 ## 1. Project Name & Track
 - **Project Name**: RetailIQ — AI-Powered Sales & Inventory Copilot
 - **Hackathon**: NexusTiQ24
