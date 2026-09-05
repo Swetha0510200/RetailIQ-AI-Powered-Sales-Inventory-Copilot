@@ -1,0 +1,367 @@
+{% extends "base.html" %}
+
+{% block content %}
+<!-- Quick Action Bar -->
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
+  <div>
+    <h2 style="font-size: 1.4rem; font-weight: 800; color: #ffffff;">Executive Retail Dashboard</h2>
+    <p style="font-size: 0.82rem; color: var(--text-muted);">
+      Deterministic analytics baseline: {{ kpis.date_range }} ({{ current_mode | upper }} mode)
+    </p>
+  </div>
+  <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+    <a href="/copilot" class="btn btn-primary" id="btnDashCopilot">
+      <span>🤖 Ask AI Copilot</span>
+    </a>
+    <a href="/recommendations" class="btn btn-secondary" id="btnDashRecs">
+      <span>💡 View Reorders</span>
+    </a>
+    <a href="/sales" class="btn btn-secondary" id="btnDashSales">
+      <span>💰 Record Sale</span>
+    </a>
+  </div>
+</div>
+
+<!-- 6 KPI CARDS -->
+<div class="kpi-grid">
+  <!-- Revenue -->
+  <div class="kpi-card" id="kpi-revenue">
+    <div class="kpi-header">
+      <span class="kpi-label">Total Revenue</span>
+      <span class="kpi-icon">💵</span>
+    </div>
+    <div class="kpi-value">₹{{ "{:,.2f}".format(kpis.total_revenue) }}</div>
+    <div class="kpi-subtext">
+      <span class="{% if kpis.revenue_growth_pct >= 0 %}growth-positive{% else %}growth-negative{% endif %}">
+        {{ "+" if kpis.revenue_growth_pct >= 0 else "" }}{{ kpis.revenue_growth_pct }}%
+      </span>
+      <span>vs prior 30 days</span>
+    </div>
+  </div>
+
+  <!-- Units Sold -->
+  <div class="kpi-card" id="kpi-units">
+    <div class="kpi-header">
+      <span class="kpi-label">Units Sold</span>
+      <span class="kpi-icon">📦</span>
+    </div>
+    <div class="kpi-value">{{ "{:,}".format(kpis.total_units) }}</div>
+    <div class="kpi-subtext">
+      <span class="{% if kpis.units_growth_pct >= 0 %}growth-positive{% else %}growth-negative{% endif %}">
+        {{ "+" if kpis.units_growth_pct >= 0 else "" }}{{ kpis.units_growth_pct }}%
+      </span>
+      <span>vs prior 30 days</span>
+    </div>
+  </div>
+
+  <!-- Inventory Value -->
+  <div class="kpi-card" id="kpi-inventory-value">
+    <div class="kpi-header">
+      <span class="kpi-label">Inventory Value</span>
+      <span class="kpi-icon">🏦</span>
+    </div>
+    <div class="kpi-value">₹{{ "{:,.2f}".format(inventory_summary.total_cost_value) }}</div>
+    <div class="kpi-subtext">
+      <span>{{ "{:,}".format(inventory_summary.total_stock_units) }} units across network</span>
+    </div>
+  </div>
+
+  <!-- Active Products -->
+  <div class="kpi-card" id="kpi-products">
+    <div class="kpi-header">
+      <span class="kpi-label">Active SKUs</span>
+      <span class="kpi-icon">🏷️</span>
+    </div>
+    <div class="kpi-value">{{ total_products_count }}</div>
+    <div class="kpi-subtext">
+      <span>{{ kpis.active_skus }} transacted this month</span>
+    </div>
+  </div>
+
+  <!-- Stores -->
+  <div class="kpi-card" id="kpi-stores">
+    <div class="kpi-header">
+      <span class="kpi-label">Retail Stores</span>
+      <span class="kpi-icon">🏬</span>
+    </div>
+    <div class="kpi-value">{{ stores_count }}</div>
+    <div class="kpi-subtext">
+      <span>100% active footprint</span>
+    </div>
+  </div>
+
+  <!-- Stockout Risk -->
+  <div class="kpi-card" id="kpi-stockouts">
+    <div class="kpi-header">
+      <span class="kpi-label">Stock-Out Risks</span>
+      <span class="kpi-icon">🚨</span>
+    </div>
+    <div class="kpi-value" style="color: #f87171;">{{ inventory_summary.critical_stockouts }}</div>
+    <div class="kpi-subtext">
+      <span style="color: #fca5a5; font-weight: 600;">Immediate reorder needed</span>
+    </div>
+  </div>
+</div>
+
+<!-- CHARTS GRID (2x2) -->
+<div class="charts-grid">
+  <!-- Chart 1: Sales & Revenue Trend -->
+  <div class="chart-card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">📈 Daily Sales & Revenue Trend</div>
+        <div class="card-subtitle">30-day historical time-series from SQLite sales table</div>
+      </div>
+    </div>
+    <div class="chart-wrapper">
+      <canvas id="salesTrendChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Chart 2: Store Performance -->
+  <div class="chart-card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">🏬 Store Performance Comparison</div>
+        <div class="card-subtitle">Gross revenue and profit across retail locations</div>
+      </div>
+    </div>
+    <div class="chart-wrapper">
+      <canvas id="storePerformanceChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Chart 3: Category Performance -->
+  <div class="chart-card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">🍕 Revenue by Product Category</div>
+        <div class="card-subtitle">Contribution breakdown across retail departments</div>
+      </div>
+    </div>
+    <div class="chart-wrapper">
+      <canvas id="categoryChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Chart 4: Inventory Health -->
+  <div class="chart-card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">🛡️ Inventory Health Distribution</div>
+        <div class="card-subtitle">Stock statuses evaluated by deterministic formulas</div>
+      </div>
+    </div>
+    <div class="chart-wrapper">
+      <canvas id="inventoryHealthChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ALERT SUMMARY SECTION -->
+<div class="card" id="dashboard-alerts">
+  <div class="card-header">
+    <div>
+      <div class="card-title">🚨 Critical Operations Alert Summary</div>
+      <div class="card-subtitle">Prioritized stockout risks, overstocks, and sales velocity anomalies</div>
+    </div>
+    <a href="/alerts" class="btn btn-secondary btn-sm">View All {{ total_alerts_count }} Alerts →</a>
+  </div>
+
+  <div class="table-responsive">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Severity</th>
+          <th>Alert Type</th>
+          <th>Product / SKU</th>
+          <th>Store</th>
+          <th>What Happened</th>
+          <th>Recommended Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for alert in recent_alerts %}
+        <tr>
+          <td>
+            <span class="badge badge-{{ alert.severity }}">
+              {{ alert.severity }}
+            </span>
+          </td>
+          <td style="font-weight: 600; text-transform: capitalize;">
+            {{ alert.alert_type | replace('_', ' ') }}
+          </td>
+          <td>
+            <div style="font-weight: 600; color: #ffffff;">{{ alert.product_name }}</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">{{ alert.sku }}</div>
+          </td>
+          <td>{{ alert.store_name }}</td>
+          <td style="white-space: normal; min-width: 260px; font-size: 0.82rem; color: var(--text-secondary);">
+            {{ alert.what_happened }}
+          </td>
+          <td style="white-space: normal; min-width: 240px; font-size: 0.82rem; color: #a5b4fc;">
+            {{ alert.recommended_action }}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px;">
+            No active operational alerts. All stock runways and sales channels are currently healthy.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Real database data passed safely from Flask backend into Chart.js
+  const salesTrends = {{ sales_trends | tojson | safe }};
+  const storePerf = {{ store_performance | tojson | safe }};
+  const invSummary = {{ inventory_summary | tojson | safe }};
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // 1. Sales Trend Chart
+    const trendCtx = document.getElementById('salesTrendChart')?.getContext('2d');
+    if (trendCtx && salesTrends && salesTrends.length > 0) {
+      new Chart(trendCtx, {
+        type: 'line',
+        data: {
+          labels: salesTrends.map(d => d.date.substring(5)),
+          datasets: [
+            {
+              label: 'Revenue (₹)',
+              data: salesTrends.map(d => d.revenue),
+              borderColor: '#6366f1',
+              backgroundColor: 'rgba(99, 102, 241, 0.1)',
+              fill: true,
+              tension: 0.35,
+              borderWidth: 2.5
+            },
+            {
+              label: 'Units Sold',
+              data: salesTrends.map(d => d.units),
+              borderColor: '#06b6d4',
+              backgroundColor: 'transparent',
+              borderDash: [4, 4],
+              tension: 0.35,
+              borderWidth: 2,
+              yAxisID: 'y1'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            x: { grid: { color: 'rgba(255, 255, 255, 0.04)' }, ticks: { color: '#94a3b8', font: { size: 10 } } },
+            y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94a3b8' } },
+            y1: { position: 'right', grid: { display: false }, ticks: { color: '#38bdf8' } }
+          },
+          plugins: {
+            legend: { labels: { color: '#cbd5e1' } }
+          }
+        }
+      });
+    }
+
+    // 2. Store Performance Chart
+    const storeCtx = document.getElementById('storePerformanceChart')?.getContext('2d');
+    if (storeCtx && storePerf && storePerf.length > 0) {
+      new Chart(storeCtx, {
+        type: 'bar',
+        data: {
+          labels: storePerf.map(s => s.store_name),
+          datasets: [
+            {
+              label: 'Revenue (₹)',
+              data: storePerf.map(s => s.revenue),
+              backgroundColor: 'rgba(99, 102, 241, 0.85)',
+              borderRadius: 6
+            },
+            {
+              label: 'Profit (₹)',
+              data: storePerf.map(s => s.profit),
+              backgroundColor: 'rgba(16, 185, 129, 0.85)',
+              borderRadius: 6
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { grid: { color: 'rgba(255, 255, 255, 0.04)' }, ticks: { color: '#94a3b8' } },
+            y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#94a3b8' } }
+          },
+          plugins: {
+            legend: { labels: { color: '#cbd5e1' } }
+          }
+        }
+      });
+    }
+
+    // 3. Category Breakdown Chart
+    const catCtx = document.getElementById('categoryChart')?.getContext('2d');
+    if (catCtx) {
+      // Compute from sales data
+      fetch('/api/sales?days=30&data_mode=' + (window.currentDataMode || 'demo'))
+        .then(r => r.json())
+        .then(data => {
+          const cats = data.category_performance || [];
+          new Chart(catCtx, {
+            type: 'doughnut',
+            data: {
+              labels: cats.map(c => c.category_name),
+              datasets: [{
+                data: cats.map(c => c.revenue),
+                backgroundColor: ['#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#f97316'],
+                borderWidth: 0
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { position: 'right', labels: { color: '#cbd5e1', boxWidth: 12 } }
+              }
+            }
+          });
+        }).catch(err => console.error(err));
+    }
+
+    // 4. Inventory Health Distribution Chart
+    const invCtx = document.getElementById('inventoryHealthChart')?.getContext('2d');
+    if (invCtx && invSummary) {
+      new Chart(invCtx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Healthy', 'Critical Stockout', 'Low Stock', 'Overstocked', 'Slow Moving'],
+          datasets: [{
+            data: [
+              invSummary.healthy_items || 0,
+              invSummary.critical_stockouts || 0,
+              invSummary.low_stock_items || 0,
+              invSummary.overstocked_items || 0,
+              invSummary.slow_moving_items || 0
+            ],
+            backgroundColor: ['#10b981', '#ef4444', '#f59e0b', '#8b5cf6', '#64748b'],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'right', labels: { color: '#cbd5e1', boxWidth: 12 } }
+          }
+        }
+      });
+    }
+  });
+</script>
+{% endblock %}

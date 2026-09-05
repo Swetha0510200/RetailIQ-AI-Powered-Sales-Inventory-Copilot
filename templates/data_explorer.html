@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
+  <div>
+    <h2 style="font-size: 1.4rem; font-weight: 800; color: #ffffff;">SQLite Data Explorer & Audit Trail</h2>
+    <p style="font-size: 0.82rem; color: var(--text-muted);">
+      Direct underlying relational database inspection, transparency audit, and CSV bulk data ingestion.
+    </p>
+  </div>
+  <button class="btn btn-primary" onclick="openModal('importCsvModal')" id="btnOpenCsvImport">
+    <span>📁 Bulk CSV Import</span>
+  </button>
+</div>
+
+<!-- CONTROLS & TABLE SELECTOR -->
+<form method="GET" action="/data-explorer" class="filter-bar" id="explorerForm">
+  <div style="min-width: 180px;">
+    <label class="form-label" style="margin-bottom: 4px;">Select Database Table</label>
+    <select name="table" class="form-select" onchange="document.getElementById('explorerForm').submit()">
+      {% for t in available_tables %}
+      <option value="{{ t }}" {% if selected_table == t %}selected{% endif %}>
+        {{ t | upper }} ({{ total_rows if selected_table == t else '' }})
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div style="flex: 1; min-width: 220px;">
+    <label class="form-label" style="margin-bottom: 4px;">Search Records</label>
+    <input 
+      type="text" 
+      name="search" 
+      class="form-control" 
+      placeholder="Filter by keyword..." 
+      value="{{ search or '' }}"
+    >
+  </div>
+
+  <div style="min-width: 120px;">
+    <label class="form-label" style="margin-bottom: 4px;">Limit</label>
+    <select name="limit" class="form-select" onchange="document.getElementById('explorerForm').submit()">
+      <option value="25" {% if limit == 25 %}selected{% endif %}>25 Rows</option>
+      <option value="50" {% if limit == 50 %}selected{% endif %}>50 Rows</option>
+      <option value="100" {% if limit == 100 %}selected{% endif %}>100 Rows</option>
+    </select>
+  </div>
+
+  <div style="align-self: flex-end;">
+    <button type="submit" class="btn btn-secondary">Query</button>
+    <a href="/data-explorer?table={{ selected_table }}" class="btn btn-secondary" style="padding: 9px 12px;">Reset</a>
+  </div>
+</form>
+
+<!-- DATA TABLE VIEWER -->
+<div class="card" style="padding: 0; overflow: hidden;">
+  <div class="card-header" style="padding: 16px 20px; margin-bottom: 0;">
+    <div>
+      <div class="card-title">
+        <span>Table: <code style="color: #a5b4fc; font-size: 1rem;">{{ selected_table }}</code></span>
+      </div>
+      <div class="card-subtitle">Showing {{ rows | length }} of {{ total_rows }} records</div>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="data-table" id="explorerTable">
+      <thead>
+        <tr>
+          {% for col in columns %}
+          <th>{{ col }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          {% for col in columns %}
+          <td style="{% if col in ('cost_price', 'selling_price', 'revenue', 'profit', 'estimated_cost') %}font-weight: 600; color: #ffffff;{% elif col.endswith('_id') or col == 'sku' or col == 'code' %}font-family: var(--font-mono); color: #a5b4fc;{% endif %}">
+            {{ row[col] if row[col] is not none else 'NULL' }}
+          </td>
+          {% endfor %}
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="{{ columns | length if columns else 1 }}" style="text-align: center; color: var(--text-muted); padding: 32px;">
+            No records found in table '{{ selected_table }}'.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- CSV IMPORT MODAL -->
+<div class="modal-backdrop" id="importCsvModal">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3 class="modal-title">Bulk Import CSV Data</h3>
+      <button class="modal-close-btn" onclick="closeModal('importCsvModal')">✕</button>
+    </div>
+    <form id="csvImportForm" onsubmit="submitCsvForm(event)" enctype="multipart/form-data">
+      <div class="form-group">
+        <label class="form-label">Destination Table</label>
+        <select id="csv_table_type" name="table_type" class="form-select" onchange="updateCsvFormatHint()" required>
+          <option value="products">Products Master (products)</option>
+          <option value="inventory">Inventory Stock Counts (inventory)</option>
+          <option value="sales">Sales Transactions (sales)</option>
+          <option value="stores">Retail Stores (stores)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Select CSV File (.csv)</label>
+        <input type="file" id="csv_file" name="file" class="form-control" accept=".csv" required>
+      </div>
+
+      <div id="csvFormatHint" style="background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; font-size: 0.78rem; color: #94a3b8; margin-bottom: 18px;">
+        <!-- Dynamically updated hint -->
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 12px;">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('importCsvModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="btnUploadCsv">Upload & Ingest</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const hints = {
+    products: 'Expected CSV Headers: sku, name, category_id, cost_price, selling_price, supplier_name, lead_time_days, min_reorder_qty',
+    inventory: 'Expected CSV Headers: store_id, product_id, current_stock, safety_stock, reorder_level, inventory_date',
+    sales: 'Expected CSV Headers: date, store_id, product_id, units_sold, unit_price',
+    stores: 'Expected CSV Headers: code, name, city, address, manager_name, phone'
+  };
+
+  function updateCsvFormatHint() {
+    const tableType = document.getElementById('csv_table_type').value;
+    const box = document.getElementById('csvFormatHint');
+    if (box) {
+      box.innerHTML = `<strong>Format Requirement:</strong><br>${hints[tableType] || ''}`;
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', updateCsvFormatHint);
+
+  async function submitCsvForm(e) {
+    e.preventDefault();
+    const fileInput = document.getElementById('csv_file');
+    const tableType = document.getElementById('csv_table_type').value;
+    if (!fileInput.files || fileInput.files.length === 0) {
+      alert('Please select a .csv file to upload.');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    formData.append('table_type', tableType);
+
+    try {
+      const resp = await fetch('/api/data/import-csv', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await resp.json();
+      if (data.success) {
+        alert(data.message || 'CSV imported successfully!');
+        window.location.href = '/data-explorer?table=' + tableType;
+      } else {
+        alert('CSV Import Error: ' + (data.error || 'Failed to import CSV file.'));
+      }
+    } catch (err) {
+      alert('Network error: ' + err.message);
+    }
+  }
+</script>
+{% endblock %}

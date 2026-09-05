@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
+  <div>
+    <h2 style="font-size: 1.4rem; font-weight: 800; color: #ffffff;">Sales Transactions & Demand Velocity</h2>
+    <p style="font-size: 0.82rem; color: var(--text-muted);">
+      Daily store POS sales logging with immediate reactivity in inventory runway and replenishment calculations.
+    </p>
+  </div>
+  <button class="btn btn-primary" onclick="openModal('recordSaleModal')" id="btnOpenRecordSale">
+    <span>+ Record New Sale</span>
+  </button>
+</div>
+
+<!-- SALES KPIS -->
+<div class="kpi-grid">
+  <div class="kpi-card">
+    <div class="kpi-header">
+      <span class="kpi-label">Sales Revenue</span>
+      <span class="kpi-icon">💵</span>
+    </div>
+    <div class="kpi-value">₹{{ "{:,.2f}".format(kpis.total_revenue) }}</div>
+    <div class="kpi-subtext">
+      <span>Last {{ period_days }} days</span>
+    </div>
+  </div>
+
+  <div class="kpi-card">
+    <div class="kpi-header">
+      <span class="kpi-label">Units Sold</span>
+      <span class="kpi-icon">📦</span>
+    </div>
+    <div class="kpi-value">{{ "{:,}".format(kpis.total_units) }}</div>
+    <div class="kpi-subtext">
+      <span>Avg {{ "{:,.1f}".format(kpis.total_units / period_days) }} units/day</span>
+    </div>
+  </div>
+
+  <div class="kpi-card">
+    <div class="kpi-header">
+      <span class="kpi-label">Gross Profit</span>
+      <span class="kpi-icon">📈</span>
+    </div>
+    <div class="kpi-value" style="color: #34d399;">₹{{ "{:,.2f}".format(kpis.total_profit) }}</div>
+    <div class="kpi-subtext">
+      <span class="growth-positive">{{ kpis.profit_margin_pct }}% margin</span>
+    </div>
+  </div>
+
+  <div class="kpi-card">
+    <div class="kpi-header">
+      <span class="kpi-label">Transacted SKUs</span>
+      <span class="kpi-icon">🏷️</span>
+    </div>
+    <div class="kpi-value">{{ kpis.active_skus }}</div>
+    <div class="kpi-subtext">
+      <span>Active retail demand</span>
+    </div>
+  </div>
+</div>
+
+<!-- FILTER BAR -->
+<form method="GET" action="/sales" class="filter-bar" id="salesFilterForm">
+  <div style="min-width: 200px;">
+    <select name="store_id" class="form-select" onchange="document.getElementById('salesFilterForm').submit()">
+      <option value="">All Stores</option>
+      {% for st in stores %}
+      <option value="{{ st.store_id }}" {% if selected_store == st.store_id %}selected{% endif %}>
+        {{ st.name }} ({{ st.city }})
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div style="min-width: 170px;">
+    <select name="days" class="form-select" onchange="document.getElementById('salesFilterForm').submit()">
+      <option value="7" {% if period_days == 7 %}selected{% endif %}>Last 7 Days (Recent)</option>
+      <option value="30" {% if period_days == 30 %}selected{% endif %}>Last 30 Days (Baseline)</option>
+      <option value="60" {% if period_days == 60 %}selected{% endif %}>Last 60 Days</option>
+      <option value="90" {% if period_days == 90 %}selected{% endif %}>Last 90 Days</option>
+    </select>
+  </div>
+
+  <button type="submit" class="btn btn-secondary">Apply Filter</button>
+  <a href="/sales" class="btn btn-secondary" style="padding: 9px 12px;">Reset</a>
+</form>
+
+<!-- SALES TRANSACTIONS TABLE -->
+<div class="card" style="padding: 0; overflow: hidden;">
+  <div class="card-header" style="padding: 20px 24px; margin-bottom: 0;">
+    <div>
+      <div class="card-title">🧾 Recent Sales Log</div>
+      <div class="card-subtitle">Showing latest 50 POS sales records</div>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="data-table" id="salesTable">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Store</th>
+          <th>Product / SKU</th>
+          <th>Units Sold</th>
+          <th>Unit Price</th>
+          <th>Revenue</th>
+          <th>Profit</th>
+          <th>Margin %</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in recent_sales %}
+        <tr>
+          <td style="font-family: var(--font-mono); font-weight: 600; color: #a5b4fc;">{{ s.date }}</td>
+          <td>{{ s.store_name }}</td>
+          <td>
+            <div style="font-weight: 600; color: #ffffff;">{{ s.product_name }}</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">{{ s.sku }}</div>
+          </td>
+          <td style="font-weight: 700;">{{ s.units_sold }}</td>
+          <td>₹{{ "{:,.2f}".format(s.unit_price) }}</td>
+          <td style="font-weight: 600; color: #ffffff;">₹{{ "{:,.2f}".format(s.revenue) }}</td>
+          <td style="color: #34d399;">₹{{ "{:,.2f}".format(s.profit) }}</td>
+          <td>
+            <span class="badge badge-success">
+              {{ "{:.1f}".format((s.profit / s.revenue * 100) if s.revenue > 0 else 0) }}%
+            </span>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 32px;">
+            No sales transactions found for this period.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- RECORD SALE MODAL -->
+<div class="modal-backdrop" id="recordSaleModal">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3 class="modal-title">Record Daily Store Sale</h3>
+      <button class="modal-close-btn" onclick="closeModal('recordSaleModal')">✕</button>
+    </div>
+    <form id="recordSaleForm" onsubmit="submitSaleForm(event)">
+      <div class="form-group">
+        <label class="form-label">Transaction Date</label>
+        <input type="date" id="sale_date" class="form-control" value="{{ reference_date }}" required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Store Location</label>
+        <select id="sale_store_id" class="form-select" required>
+          <option value="">Select store...</option>
+          {% for st in stores %}
+          <option value="{{ st.store_id }}">{{ st.name }} ({{ st.city }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Product SKU</label>
+        <select id="sale_product_id" class="form-select" onchange="updateDefaultPrice()" required>
+          <option value="">Select product...</option>
+          {% for p in all_products %}
+          <option value="{{ p.product_id }}" data-price="{{ p.selling_price }}">{{ p.sku }} — {{ p.name }} (₹{{ p.selling_price }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+        <div class="form-group">
+          <label class="form-label">Units Sold</label>
+          <input type="number" id="sale_units" class="form-control" min="1" value="1" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Selling Price per Unit (₹)</label>
+          <input type="number" id="sale_unit_price" class="form-control" step="0.01" min="0" required>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px;">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('recordSaleModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="btnSaveSale">Record Sale</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function updateDefaultPrice() {
+    const select = document.getElementById('sale_product_id');
+    const selectedOption = select.options[select.selectedIndex];
+    const price = selectedOption.getAttribute('data-price');
+    if (price) {
+      document.getElementById('sale_unit_price').value = price;
+    }
+  }
+
+  async function submitSaleForm(e) {
+    e.preventDefault();
+    const payload = {
+      date: document.getElementById('sale_date').value,
+      store_id: parseInt(document.getElementById('sale_store_id').value),
+      product_id: parseInt(document.getElementById('sale_product_id').value),
+      units_sold: parseInt(document.getElementById('sale_units').value),
+      unit_price: parseFloat(document.getElementById('sale_unit_price').value)
+    };
+
+    try {
+      const resp = await fetch('/api/data/sale', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await resp.json();
+      if (data.success) {
+        alert(data.message || 'Sale recorded successfully! Analytics updated.');
+        window.location.reload();
+      } else {
+        alert('Error: ' + (data.error || 'Failed to record sale.'));
+      }
+    } catch (err) {
+      alert('Network error: ' + err.message);
+    }
+  }
+</script>
+{% endblock %}

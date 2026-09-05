@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
+  <div>
+    <h2 style="font-size: 1.4rem; font-weight: 800; color: #ffffff;">Retail Stores & Regional Network</h2>
+    <p style="font-size: 0.82rem; color: var(--text-muted);">
+      Store footprints, location-specific inventory valuations, and unit revenue margins.
+    </p>
+  </div>
+  <button class="btn btn-primary" onclick="openModal('addStoreModal')" id="btnOpenAddStore">
+    <span>+ Add New Store</span>
+  </button>
+</div>
+
+<!-- STORES GRID -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-bottom: 28px;">
+  {% for st in stores %}
+  <div class="card" style="margin-bottom: 0;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">
+      <div>
+        <h3 style="font-size: 1.15rem; font-weight: 800; color: #ffffff;">{{ st.store_name }}</h3>
+        <span style="font-size: 0.78rem; color: var(--text-muted); font-family: var(--font-mono);">
+          {{ st.store_code or 'STR' }} • {{ st.city }}
+        </span>
+      </div>
+      <span class="badge badge-success">Active</span>
+    </div>
+
+    <!-- Metrics Breakdown -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; background: rgba(0,0,0,0.2); padding: 14px; border-radius: 8px; margin-bottom: 16px;">
+      <div>
+        <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase;">30-Day Revenue</div>
+        <div style="font-size: 1.1rem; font-weight: 800; color: #ffffff;">₹{{ "{:,.2f}".format(st.revenue | default(0.0)) }}</div>
+      </div>
+      <div>
+        <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase;">30-Day Profit</div>
+        <div style="font-size: 1.1rem; font-weight: 800; color: #34d399;">₹{{ "{:,.2f}".format(st.profit | default(0.0)) }}</div>
+      </div>
+      <div>
+        <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase;">Stock Units</div>
+        <div style="font-size: 0.95rem; font-weight: 700; color: #cbd5e1;">{{ "{:,}".format(st.stock_units | default(0)) }}</div>
+      </div>
+      <div>
+        <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase;">Stock Valuation</div>
+        <div style="font-size: 0.95rem; font-weight: 700; color: #cbd5e1;">₹{{ "{:,.0f}".format(st.inventory_value | default(0.0)) }}</div>
+      </div>
+    </div>
+
+    <!-- Health Flags -->
+    <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+      {% if st.critical_stockouts and st.critical_stockouts > 0 %}
+        <span class="badge badge-critical">🚨 {{ st.critical_stockouts }} Stockout Risk</span>
+      {% else %}
+        <span class="badge badge-success">0 Stockout Risks</span>
+      {% endif %}
+
+      {% if st.overstocked_items and st.overstocked_items > 0 %}
+        <span class="badge" style="background: var(--purple-bg); color: #c084fc; border: 1px solid rgba(168,85,247,0.3);">
+          📦 {{ st.overstocked_items }} Overstocked
+        </span>
+      {% endif %}
+    </div>
+
+    <!-- Footer metadata -->
+    <div style="font-size: 0.78rem; color: var(--text-muted); border-top: 1px solid var(--border-color); padding-top: 12px;">
+      <div>👤 <strong>Manager:</strong> {{ st.manager_name or 'Store Manager' }}</div>
+      <div style="margin-top: 2px;">📞 <strong>Contact:</strong> {{ st.contact_phone or 'N/A' }}</div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- ADD STORE MODAL -->
+<div class="modal-backdrop" id="addStoreModal">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3 class="modal-title">Register Retail Store Location</h3>
+      <button class="modal-close-btn" onclick="closeModal('addStoreModal')">✕</button>
+    </div>
+    <form id="addStoreForm" onsubmit="submitStoreForm(event)">
+      <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 14px;">
+        <div class="form-group">
+          <label class="form-label">Store Code</label>
+          <input type="text" id="st_code" class="form-control" placeholder="e.g. STR-BLR" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Store Name</label>
+          <input type="text" id="st_name" class="form-control" placeholder="e.g. Bengaluru Tech Park" required>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">City / Region</label>
+        <input type="text" id="st_city" class="form-control" placeholder="e.g. Bengaluru" required>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Full Street Address</label>
+        <input type="text" id="st_address" class="form-control" placeholder="e.g. Ground Floor, Electronic City Phase 1">
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+        <div class="form-group">
+          <label class="form-label">Manager Name</label>
+          <input type="text" id="st_manager" class="form-control" placeholder="e.g. Rajesh Kumar">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Contact Phone</label>
+          <input type="text" id="st_phone" class="form-control" placeholder="+91 98000 00000">
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px;">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('addStoreModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="btnSaveStore">Save Store</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  async function submitStoreForm(e) {
+    e.preventDefault();
+    const payload = {
+      code: document.getElementById('st_code').value.trim().toUpperCase(),
+      name: document.getElementById('st_name').value.trim(),
+      city: document.getElementById('st_city').value.trim(),
+      address: document.getElementById('st_address').value.trim(),
+      manager_name: document.getElementById('st_manager').value.trim(),
+      phone: document.getElementById('st_phone').value.trim()
+    };
+
+    try {
+      const resp = await fetch('/api/data/store', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await resp.json();
+      if (data.success) {
+        alert(data.message || 'Store created successfully!');
+        window.location.reload();
+      } else {
+        alert('Error: ' + (data.error || 'Failed to create store.'));
+      }
+    } catch (err) {
+      alert('Network error: ' + err.message);
+    }
+  }
+</script>
+{% endblock %}

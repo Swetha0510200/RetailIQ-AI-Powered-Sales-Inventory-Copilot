@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
+  <div>
+    <h2 style="font-size: 1.4rem; font-weight: 800; color: #ffffff;">Inventory Management & Stock Health</h2>
+    <p style="font-size: 0.82rem; color: var(--text-muted);">
+      Real-time stock runways, replenishment lead times, and multi-store allocation.
+    </p>
+  </div>
+  <button class="btn btn-primary" onclick="openModal('addInventoryModal')" id="btnOpenAddInventory">
+    <span>+ Add / Update Stock</span>
+  </button>
+</div>
+
+<!-- INVENTORY HEALTH SUMMARY PILLS -->
+<div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); margin-bottom: 22px;">
+  <div class="kpi-card" style="padding: 14px;">
+    <span class="kpi-label" style="font-size: 0.72rem;">Total SKUs</span>
+    <div class="kpi-value" style="font-size: 1.35rem;">{{ summary.total_items }}</div>
+  </div>
+  <div class="kpi-card" style="padding: 14px;">
+    <span class="kpi-label" style="font-size: 0.72rem;">Network Units</span>
+    <div class="kpi-value" style="font-size: 1.35rem;">{{ "{:,}".format(summary.total_stock_units) }}</div>
+  </div>
+  <div class="kpi-card" style="padding: 14px;">
+    <span class="kpi-label" style="font-size: 0.72rem;">Stock Value</span>
+    <div class="kpi-value" style="font-size: 1.35rem;">₹{{ "{:,.0f}".format(summary.total_cost_value) }}</div>
+  </div>
+  <div class="kpi-card" style="padding: 14px; border-color: rgba(239, 68, 68, 0.4);">
+    <span class="kpi-label" style="font-size: 0.72rem; color: #f87171;">Critical Stockouts</span>
+    <div class="kpi-value" style="font-size: 1.35rem; color: #f87171;">{{ summary.critical_stockouts }}</div>
+  </div>
+  <div class="kpi-card" style="padding: 14px; border-color: rgba(245, 158, 11, 0.4);">
+    <span class="kpi-label" style="font-size: 0.72rem; color: #fbbf24;">Low Stock</span>
+    <div class="kpi-value" style="font-size: 1.35rem; color: #fbbf24;">{{ summary.low_stock_items }}</div>
+  </div>
+  <div class="kpi-card" style="padding: 14px; border-color: rgba(168, 85, 247, 0.4);">
+    <span class="kpi-label" style="font-size: 0.72rem; color: #c084fc;">Overstocked</span>
+    <div class="kpi-value" style="font-size: 1.35rem; color: #c084fc;">{{ summary.overstocked_items }}</div>
+  </div>
+  <div class="kpi-card" style="padding: 14px; border-color: rgba(16, 185, 129, 0.4);">
+    <span class="kpi-label" style="font-size: 0.72rem; color: #34d399;">Healthy Stock</span>
+    <div class="kpi-value" style="font-size: 1.35rem; color: #34d399;">{{ summary.healthy_items }}</div>
+  </div>
+</div>
+
+<!-- FILTER BAR -->
+<form method="GET" action="/inventory" class="filter-bar" id="inventoryFilterForm">
+  <div style="flex: 1; min-width: 200px;">
+    <input 
+      type="text" 
+      name="search" 
+      class="form-control" 
+      placeholder="Search SKU, product name, or supplier..." 
+      value="{{ search or '' }}"
+    >
+  </div>
+
+  <div style="min-width: 170px;">
+    <select name="store_id" class="form-select" onchange="document.getElementById('inventoryFilterForm').submit()">
+      <option value="">All Stores</option>
+      {% for st in stores %}
+      <option value="{{ st.store_id }}" {% if selected_store == st.store_id %}selected{% endif %}>
+        {{ st.name }} ({{ st.city }})
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div style="min-width: 170px;">
+    <select name="category_id" class="form-select" onchange="document.getElementById('inventoryFilterForm').submit()">
+      <option value="">All Categories</option>
+      {% for cat in categories %}
+      <option value="{{ cat.category_id }}" {% if selected_category == cat.category_id %}selected{% endif %}>
+        {{ cat.name }}
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div style="min-width: 170px;">
+    <select name="risk_filter" class="form-select" onchange="document.getElementById('inventoryFilterForm').submit()">
+      <option value="">All Health Statuses</option>
+      <option value="critical_stockout" {% if selected_risk == 'critical_stockout' %}selected{% endif %}>🚨 Critical Stock-Out</option>
+      <option value="low_stock" {% if selected_risk == 'low_stock' %}selected{% endif %}>⚠️ Low Stock</option>
+      <option value="overstocked" {% if selected_risk == 'overstocked' %}selected{% endif %}>📦 Overstocked (>60d)</option>
+      <option value="slow_moving" {% if selected_risk == 'slow_moving' %}selected{% endif %}>🐢 Slow Moving</option>
+      <option value="healthy" {% if selected_risk == 'healthy' %}selected{% endif %}>✅ Healthy</option>
+    </select>
+  </div>
+
+  <button type="submit" class="btn btn-secondary">Filter</button>
+  <a href="/inventory" class="btn btn-secondary" style="padding: 9px 12px;" title="Reset filters">Reset</a>
+</form>
+
+<!-- INVENTORY TABLE -->
+<div class="card" style="padding: 0; overflow: hidden;">
+  <div class="table-responsive">
+    <table class="data-table" id="inventoryTable">
+      <thead>
+        <tr>
+          <th>SKU</th>
+          <th>Product Name</th>
+          <th>Store</th>
+          <th>Current Stock</th>
+          <th>Avg Sales / Day</th>
+          <th>Days Remaining</th>
+          <th>Lead Time</th>
+          <th>Stock Value (Cost)</th>
+          <th>Health Status</th>
+          <th>Action Guidance</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in items %}
+        <tr>
+          <td style="font-family: var(--font-mono); font-weight: 600; color: #a5b4fc;">{{ it.sku }}</td>
+          <td>
+            <div style="font-weight: 600; color: #ffffff;">{{ it.product_name }}</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">{{ it.category_name }} • {{ it.supplier_name }}</div>
+          </td>
+          <td>{{ it.store_name }}</td>
+          <td style="font-weight: 700; font-size: 0.95rem;">{{ it.current_stock }}</td>
+          <td>{{ it.avg_daily_sales }}</td>
+          <td>
+            <span style="font-weight: 700; color: {% if it.days_remaining <= (it.lead_time_days + 2) %}#f87171{% elif it.days_remaining > 60 %}#c084fc{% else %}#34d399{% endif %};">
+              {{ it.days_remaining }} days
+            </span>
+          </td>
+          <td>{{ it.lead_time_days }}d</td>
+          <td>₹{{ "{:,.2f}".format(it.stock_value) }}</td>
+          <td>
+            {% if it.risk_level == 'critical_stockout' %}
+              <span class="badge badge-critical">🚨 Critical</span>
+            {% elif it.risk_level == 'low_stock' %}
+              <span class="badge badge-warning">⚠️ Low</span>
+            {% elif it.risk_level == 'overstocked' %}
+              <span class="badge" style="background: var(--purple-bg); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3);">📦 Overstock</span>
+            {% elif it.risk_level == 'slow_moving' %}
+              <span class="badge badge-info">🐢 Slow</span>
+            {% else %}
+              <span class="badge badge-success">✅ Healthy</span>
+            {% endif %}
+          </td>
+          <td style="white-space: normal; min-width: 240px; font-size: 0.8rem; color: #cbd5e1;">
+            {{ it.recommended_action }}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="10" style="text-align: center; color: var(--text-muted); padding: 32px;">
+            No inventory records found matching the active filter criteria.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ADD/UPDATE INVENTORY MODAL -->
+<div class="modal-backdrop" id="addInventoryModal">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3 class="modal-title">Record / Update Stock Inventory</h3>
+      <button class="modal-close-btn" onclick="closeModal('addInventoryModal')">✕</button>
+    </div>
+    <form id="addInventoryForm" onsubmit="submitInventoryForm(event)">
+      <div class="form-group">
+        <label class="form-label">Store Location</label>
+        <select id="inv_store_id" class="form-select" required>
+          <option value="">Select store...</option>
+          {% for st in stores %}
+          <option value="{{ st.store_id }}">{{ st.name }} ({{ st.city }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Product SKU</label>
+        <select id="inv_product_id" class="form-select" required>
+          <option value="">Select product...</option>
+          {% for p in all_products %}
+          <option value="{{ p.product_id }}">{{ p.sku }} — {{ p.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+        <div class="form-group">
+          <label class="form-label">Physical Count / Current Stock</label>
+          <input type="number" id="inv_current_stock" class="form-control" min="0" required placeholder="e.g. 50">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Safety Stock Buffer</label>
+          <input type="number" id="inv_safety_stock" class="form-control" min="0" value="10" required>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+        <div class="form-group">
+          <label class="form-label">Reorder Level</label>
+          <input type="number" id="inv_reorder_level" class="form-control" min="0" placeholder="Auto or e.g. 25">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Inventory Count Date</label>
+          <input type="date" id="inv_date" class="form-control" value="{{ reference_date }}">
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px;">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('addInventoryModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="btnSaveInventory">Save Stock Count</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  async function submitInventoryForm(e) {
+    e.preventDefault();
+    const payload = {
+      store_id: parseInt(document.getElementById('inv_store_id').value),
+      product_id: parseInt(document.getElementById('inv_product_id').value),
+      current_stock: parseInt(document.getElementById('inv_current_stock').value),
+      safety_stock: parseInt(document.getElementById('inv_safety_stock').value || 10),
+      reorder_level: document.getElementById('inv_reorder_level').value ? parseInt(document.getElementById('inv_reorder_level').value) : null,
+      inventory_date: document.getElementById('inv_date').value
+    };
+
+    try {
+      const resp = await fetch('/api/data/inventory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await resp.json();
+      if (data.success) {
+        alert(data.message || 'Inventory updated successfully!');
+        window.location.reload();
+      } else {
+        alert('Error: ' + (data.error || 'Failed to save inventory count.'));
+      }
+    } catch (err) {
+      alert('Network error: ' + err.message);
+    }
+  }
+</script>
+{% endblock %}

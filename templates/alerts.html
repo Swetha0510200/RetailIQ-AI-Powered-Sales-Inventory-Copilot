@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
+  <div>
+    <h2 style="font-size: 1.4rem; font-weight: 800; color: #ffffff;">Prioritized Operational Alerts</h2>
+    <p style="font-size: 0.82rem; color: var(--text-muted);">
+      Automated exception management detecting stockouts, capital lockups, and demand velocity shifts.
+    </p>
+  </div>
+  <div style="display: flex; gap: 10px;">
+    <span class="badge badge-critical" style="font-size: 0.82rem; padding: 6px 14px;">{{ counts.critical }} Critical</span>
+    <span class="badge badge-warning" style="font-size: 0.82rem; padding: 6px 14px;">{{ counts.warning }} Warnings</span>
+    <span class="badge badge-info" style="font-size: 0.82rem; padding: 6px 14px;">{{ counts.info }} Informational</span>
+  </div>
+</div>
+
+<!-- FILTER BAR -->
+<form method="GET" action="/alerts" class="filter-bar" id="alertsFilterForm">
+  <div style="min-width: 180px;">
+    <select name="store_id" class="form-select" onchange="document.getElementById('alertsFilterForm').submit()">
+      <option value="">All Stores</option>
+      {% for st in stores %}
+      <option value="{{ st.store_id }}" {% if selected_store == st.store_id %}selected{% endif %}>
+        {{ st.name }}
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div style="min-width: 170px;">
+    <select name="severity" class="form-select" onchange="document.getElementById('alertsFilterForm').submit()">
+      <option value="">All Severities</option>
+      <option value="critical" {% if selected_severity == 'critical' %}selected{% endif %}>🚨 Critical Only</option>
+      <option value="warning" {% if selected_severity == 'warning' %}selected{% endif %}>⚠️ Warnings Only</option>
+      <option value="info" {% if selected_severity == 'info' %}selected{% endif %}>ℹ️ Info Only</option>
+    </select>
+  </div>
+
+  <div style="min-width: 180px;">
+    <select name="alert_type" class="form-select" onchange="document.getElementById('alertsFilterForm').submit()">
+      <option value="">All Alert Types</option>
+      <option value="stock_out" {% if selected_type == 'stock_out' %}selected{% endif %}>Stock-Out Risk</option>
+      <option value="overstock" {% if selected_type == 'overstock' %}selected{% endif %}>Overstocked Inventory</option>
+      <option value="slow_moving" {% if selected_type == 'slow_moving' %}selected{% endif %}>Slow-Moving SKU</option>
+      <option value="sales_spike" {% if selected_type == 'sales_spike' %}selected{% endif %}>Demand Spike</option>
+      <option value="sales_drop" {% if selected_type == 'sales_drop' %}selected{% endif %}>Demand Drop</option>
+    </select>
+  </div>
+
+  <button type="submit" class="btn btn-secondary">Filter</button>
+  <a href="/alerts" class="btn btn-secondary" style="padding: 9px 12px;">Reset</a>
+</form>
+
+<!-- ALERTS LIST -->
+<div style="display: flex; flex-direction: column; gap: 16px;">
+  {% for alt in alerts %}
+  <div class="card" style="margin-bottom: 0; border-left: 4px solid {% if alt.severity == 'critical' %}#ef4444{% elif alt.severity == 'warning' %}#f59e0b{% else %}#06b6d4{% endif %};">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+      <div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="badge badge-{{ alt.severity }}">{{ alt.severity }}</span>
+          <span style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono);">{{ alt.id }}</span>
+          <span style="font-size: 0.8rem; font-weight: 700; color: #a5b4fc; text-transform: uppercase;">
+            {{ alt.alert_type | replace('_', ' ') }}
+          </span>
+        </div>
+        <h3 style="font-size: 1.15rem; font-weight: 800; color: #ffffff; margin-top: 6px;">
+          {{ alt.product_name }} — <span style="color: var(--text-secondary);">{{ alt.store_name }}</span>
+        </h3>
+      </div>
+
+      {% if alt.alert_type == 'stock_out' %}
+      <button class="btn btn-primary btn-sm" onclick="quickReorder('{{ alt.store_id }}', '{{ alt.product_id }}', '{{ alt.product_name }}')">
+        <span>+ Create Draft Reorder</span>
+      </button>
+      {% endif %}
+    </div>
+
+    <!-- What Happened & Why it matters -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 14px;">
+      <div style="background: rgba(0,0,0,0.25); padding: 12px 14px; border-radius: 8px;">
+        <div style="font-size: 0.74rem; font-weight: 700; text-transform: uppercase; color: #cbd5e1; margin-bottom: 4px;">
+          What Happened
+        </div>
+        <div style="font-size: 0.86rem; color: #ffffff; line-height: 1.5;">
+          {{ alt.what_happened }}
+        </div>
+      </div>
+
+      <div style="background: rgba(0,0,0,0.25); padding: 12px 14px; border-radius: 8px;">
+        <div style="font-size: 0.74rem; font-weight: 700; text-transform: uppercase; color: #cbd5e1; margin-bottom: 4px;">
+          Why It Matters
+        </div>
+        <div style="font-size: 0.86rem; color: #ffffff; line-height: 1.5;">
+          {{ alt.why_it_matters }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Recommended Action -->
+    <div style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 8px; padding: 12px 16px; margin-bottom: 12px;">
+      <span style="color: #a5b4fc; font-weight: 700; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em;">Action Guidance: </span>
+      <span style="color: #ffffff; font-size: 0.86rem;">{{ alt.recommended_action }}</span>
+    </div>
+
+    <!-- Grounding Evidence Accordion -->
+    <details style="background: rgba(10, 13, 20, 0.5); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 12px; font-size: 0.78rem;">
+      <summary style="cursor: pointer; color: var(--text-muted); font-weight: 600;">
+        🔍 View Grounding Evidence & Calculation Lineage
+      </summary>
+      <div style="margin-top: 8px; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; color: var(--text-secondary);">
+        {% for k, v in alt.evidence.items() %}
+        <div>
+          <strong style="color: #cbd5e1;">{{ k | replace('_', ' ') | title }}:</strong> {{ v }}
+        </div>
+        {% endfor %}
+      </div>
+    </details>
+  </div>
+  {% else %}
+  <div class="card" style="text-align: center; color: var(--text-muted); padding: 48px;">
+    <h3>No alerts match your filter selection</h3>
+    <p style="margin-top: 6px; font-size: 0.85rem;">All systems within normal thresholds.</p>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  async function quickReorder(storeId, productId, productName) {
+    const qty = prompt(`Enter reorder quantity for ${productName}:`, "40");
+    if (!qty || isNaN(qty) || parseInt(qty) <= 0) return;
+
+    try {
+      const resp = await fetch('/api/action/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          store_id: parseInt(storeId),
+          product_id: parseInt(productId),
+          quantity: parseInt(qty),
+          urgency: 'Urgent',
+          notes: 'Triggered from Alerts Dashboard'
+        })
+      });
+      const data = await resp.json();
+      if (data.success) {
+        alert(`Draft reorder request #${data.request_id || ''} saved into SQLite!`);
+        window.location.href = '/recommendations';
+      } else {
+        alert('Error: ' + (data.error || 'Failed to create reorder.'));
+      }
+    } catch (err) {
+      alert('Network error: ' + err.message);
+    }
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
+  <div>
+    <h2 style="font-size: 1.4rem; font-weight: 800; color: #ffffff;">Product Master Catalog</h2>
+    <p style="font-size: 0.82rem; color: var(--text-muted);">
+      Central SKU directory, unit economics, supplier lead times, and replenishment policies.
+    </p>
+  </div>
+  <button class="btn btn-primary" onclick="openModal('addProductModal')" id="btnOpenAddProduct">
+    <span>+ Add New Product</span>
+  </button>
+</div>
+
+<!-- FILTER BAR -->
+<form method="GET" action="/products" class="filter-bar" id="productsFilterForm">
+  <div style="flex: 1; min-width: 220px;">
+    <input 
+      type="text" 
+      name="search" 
+      class="form-control" 
+      placeholder="Search by SKU, product title, or supplier..." 
+      value="{{ search or '' }}"
+    >
+  </div>
+
+  <div style="min-width: 180px;">
+    <select name="category_id" class="form-select" onchange="document.getElementById('productsFilterForm').submit()">
+      <option value="">All Categories</option>
+      {% for cat in categories %}
+      <option value="{{ cat.category_id }}" {% if selected_category == cat.category_id %}selected{% endif %}>
+        {{ cat.name }}
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <button type="submit" class="btn btn-secondary">Filter</button>
+  <a href="/products" class="btn btn-secondary" style="padding: 9px 12px;">Reset</a>
+</form>
+
+<!-- PRODUCTS TABLE -->
+<div class="card" style="padding: 0; overflow: hidden;">
+  <div class="table-responsive">
+    <table class="data-table" id="productsTable">
+      <thead>
+        <tr>
+          <th>SKU</th>
+          <th>Product Name</th>
+          <th>Category</th>
+          <th>Cost Price</th>
+          <th>Selling Price</th>
+          <th>Gross Margin</th>
+          <th>Supplier</th>
+          <th>Lead Time</th>
+          <th>Min Reorder Qty</th>
+          <th>Network Stock</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in products %}
+        <tr>
+          <td style="font-family: var(--font-mono); font-weight: 600; color: #a5b4fc;">{{ p.sku }}</td>
+          <td style="font-weight: 600; color: #ffffff;">{{ p.name }}</td>
+          <td><span class="badge badge-info">{{ p.category_name }}</span></td>
+          <td>₹{{ "{:,.2f}".format(p.cost_price) }}</td>
+          <td style="font-weight: 600;">₹{{ "{:,.2f}".format(p.selling_price) }}</td>
+          <td>
+            <span style="color: #34d399; font-weight: 600;">
+              ₹{{ "{:,.2f}".format(p.margin_amount) }} ({{ p.margin_pct }}%)
+            </span>
+          </td>
+          <td>{{ p.supplier_name }}</td>
+          <td>{{ p.lead_time_days }} days</td>
+          <td>{{ p.min_reorder_qty }} units</td>
+          <td style="font-weight: 700;">{{ p.total_network_stock }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="10" style="text-align: center; color: var(--text-muted); padding: 32px;">
+            No products found matching the criteria.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ADD PRODUCT MODAL -->
+<div class="modal-backdrop" id="addProductModal">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3 class="modal-title">Create New Product SKU</h3>
+      <button class="modal-close-btn" onclick="closeModal('addProductModal')">✕</button>
+    </div>
+    <form id="addProductForm" onsubmit="submitProductForm(event)">
+      <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 14px;">
+        <div class="form-group">
+          <label class="form-label">SKU Code</label>
+          <input type="text" id="prod_sku" class="form-control" placeholder="e.g. SKU-EL-099" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Product Name</label>
+          <input type="text" id="prod_name" class="form-control" placeholder="e.g. Ultra Fast Charging Hub" required>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Category</label>
+        <select id="prod_category_id" class="form-select" required>
+          {% for cat in categories %}
+          <option value="{{ cat.category_id }}">{{ cat.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+        <div class="form-group">
+          <label class="form-label">Cost Price (₹)</label>
+          <input type="number" id="prod_cost_price" class="form-control" step="0.01" min="0" placeholder="e.g. 450.00" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Selling Price (₹)</label>
+          <input type="number" id="prod_selling_price" class="form-control" step="0.01" min="0" placeholder="e.g. 899.00" required>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Supplier Name</label>
+        <input type="text" id="prod_supplier_name" class="form-control" placeholder="e.g. Acme Components Ltd" required>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+        <div class="form-group">
+          <label class="form-label">Lead Time (Days)</label>
+          <input type="number" id="prod_lead_time" class="form-control" min="1" value="7" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Min Reorder Qty</label>
+          <input type="number" id="prod_min_reorder" class="form-control" min="1" value="15" required>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px;">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('addProductModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="btnSaveProduct">Save Product</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  async function submitProductForm(e) {
+    e.preventDefault();
+    const payload = {
+      sku: document.getElementById('prod_sku').value.trim(),
+      name: document.getElementById('prod_name').value.trim(),
+      category_id: parseInt(document.getElementById('prod_category_id').value),
+      cost_price: parseFloat(document.getElementById('prod_cost_price').value),
+      selling_price: parseFloat(document.getElementById('prod_selling_price').value),
+      supplier_name: document.getElementById('prod_supplier_name').value.trim(),
+      lead_time_days: parseInt(document.getElementById('prod_lead_time').value),
+      min_reorder_qty: parseInt(document.getElementById('prod_min_reorder').value)
+    };
+
+    try {
+      const resp = await fetch('/api/data/product', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await resp.json();
+      if (data.success) {
+        alert(data.message || 'Product created successfully!');
+        window.location.reload();
+      } else {
+        alert('Error: ' + (data.error || 'Failed to create product.'));
+      }
+    } catch (err) {
+      alert('Network error: ' + err.message);
+    }
+  }
+</script>
+{% endblock %}

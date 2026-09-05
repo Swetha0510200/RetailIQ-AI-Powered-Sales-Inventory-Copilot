@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="margin-bottom: 24px;">
+  <h2 style="font-size: 1.4rem; font-weight: 800; color: #ffffff;">AI Copilot — Retail Decision Intelligence</h2>
+  <p style="font-size: 0.82rem; color: var(--text-muted);">
+    Natural language assistant powered by Gemini NLU + Deterministic Python Analytics Engine.
+  </p>
+</div>
+
+<div class="copilot-container">
+  <!-- Left Side: Prompt Chips & System Guardrails Info -->
+  <div class="copilot-sidebar">
+    <div>
+      <div class="prompt-chips-title">💡 Quick Operational Queries</div>
+      <div class="prompt-chips-list">
+        <button class="prompt-chip" onclick="askCopilot('Which products are at risk of stockout?')">
+          🚨 Which products are at risk of stockout?
+        </button>
+        <button class="prompt-chip" onclick="askCopilot('What should I reorder?')">
+          📦 What should I reorder?
+        </button>
+        <button class="prompt-chip" onclick="askCopilot('Which products are overstocked?')">
+          🟡 Which products are overstocked?
+        </button>
+        <button class="prompt-chip" onclick="askCopilot('Which products are not moving?')">
+          🐢 Which products are not moving?
+        </button>
+        <button class="prompt-chip" onclick="askCopilot('Which products had a sales spike?')">
+          📈 Which products had a sales spike?
+        </button>
+        <button class="prompt-chip" onclick="askCopilot('Which products had a sales drop?')">
+          📉 Which products had a sales drop?
+        </button>
+        <button class="prompt-chip" onclick="askCopilot('Which store performed best?')">
+          🏬 Which store performed best?
+        </button>
+        <button class="prompt-chip" onclick="askCopilot('How much inventory value is tied up?')">
+          💰 How much inventory value is tied up?
+        </button>
+      </div>
+    </div>
+
+    <div>
+      <div class="prompt-chips-title">🛡️ Responsible AI Guardrails</div>
+      <div class="prompt-chips-list">
+        <button class="prompt-chip" style="border-color: rgba(239, 68, 68, 0.35); color: #fca5a5;" onclick="askCopilot('Will the supplier deliver tomorrow?')">
+          ⚠️ "Will the supplier deliver tomorrow?" (Unsupported Query Demo)
+        </button>
+      </div>
+      <div style="font-size: 0.74rem; color: var(--text-muted); margin-top: 10px; line-height: 1.4;">
+        <strong>Zero Hallucination Policy:</strong> The Copilot strictly refuses to fabricate real-time delivery or external supplier tracking because live GPS/supplier logistics APIs are outside the database scope.
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Side: Chat Interface -->
+  <div class="copilot-chat-area">
+    <div class="chat-messages" id="chatMessages">
+      <!-- Initial Welcome Message -->
+      <div class="chat-bubble chat-bubble-assistant">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span style="font-size: 1.2rem;">⚡</span>
+          <strong style="color: #ffffff;">Welcome to RetailIQ Copilot</strong>
+          <span class="badge badge-info" style="margin-left: auto;">Deterministic Grounding Active</span>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 8px;">
+          I am your autonomous store analytics copilot. Ask me questions about stock runways, reorder priorities, sales anomalies, overstocked working capital, or store performance.
+        </p>
+        <div style="background: rgba(0,0,0,0.25); padding: 10px 14px; border-radius: 8px; font-size: 0.78rem; color: #94a3b8; border-left: 3px solid var(--primary);">
+          <strong>Architectural Guarantee:</strong> Every number I cite is mathematically verified by our local SQLite database and Python analytics rules. Gemini generates natural language summaries and intent extraction without hallucinating financial or inventory figures.
+        </div>
+      </div>
+    </div>
+
+    <!-- Input Bar -->
+    <div class="chat-input-area">
+      <form id="copilotForm" class="chat-input-form" onsubmit="handleCopilotSubmit(event)">
+        <input 
+          type="text" 
+          id="copilotQueryInput" 
+          class="form-control" 
+          placeholder="Ask a question (e.g. Which products are at risk of stockout?)" 
+          autocomplete="off"
+          required
+        >
+        <button type="submit" class="btn btn-primary" id="btnSendCopilot">
+          <span>Send</span>
+          <span>→</span>
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function askCopilot(text) {
+    const input = document.getElementById('copilotQueryInput');
+    if (input) {
+      input.value = text;
+      handleCopilotSubmit(new Event('submit'));
+    }
+  }
+
+  async function handleCopilotSubmit(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    const input = document.getElementById('copilotQueryInput');
+    const query = input.value.trim();
+    if (!query) return;
+
+    const messages = document.getElementById('chatMessages');
+
+    // Append User Message
+    const userBubble = document.createElement('div');
+    userBubble.className = 'chat-bubble chat-bubble-user';
+    userBubble.textContent = query;
+    messages.appendChild(userBubble);
+
+    input.value = '';
+    messages.scrollTop = messages.scrollHeight;
+
+    // Append Loading State
+    const loadingBubble = document.createElement('div');
+    loadingBubble.className = 'chat-bubble chat-bubble-assistant';
+    loadingBubble.id = 'copilotLoading';
+    loadingBubble.innerHTML = '<span style="color: var(--text-muted);">⚡ Evaluating query intent, querying SQLite database, and calculating deterministic metrics...</span>';
+    messages.appendChild(loadingBubble);
+    messages.scrollTop = messages.scrollHeight;
+
+    try {
+      const resp = await fetch('/api/copilot/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: query,
+          data_mode: window.currentDataMode || 'demo'
+        })
+      });
+
+      const data = await resp.json();
+      loadingBubble.remove();
+
+      const assistantBubble = document.createElement('div');
+      assistantBubble.className = 'chat-bubble chat-bubble-assistant';
+
+      let html = '';
+
+      // Title & Model Badge
+      html += `<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">`;
+      html += `<strong style="font-size: 1rem; color: #ffffff;">${escapeHtml(data.title || 'RetailIQ Copilot')}</strong>`;
+      html += `<span class="badge ${data.is_grounded ? 'badge-success' : 'badge-warning'}">${escapeHtml(data.model_used || 'Deterministic')}</span>`;
+      html += `</div>`;
+
+      // Summary
+      html += `<p style="color: #e2e8f0; margin-bottom: 12px; line-height: 1.6;">${escapeHtml(data.summary || '')}</p>`;
+
+      // Details if present
+      if (data.details && data.details.length > 0) {
+        html += `<div style="margin-bottom: 14px;">`;
+        data.details.forEach(item => {
+          html += `<div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 14px; margin-bottom: 6px; font-size: 0.82rem;">`;
+          html += `<div style="font-weight: 700; color: #ffffff;">${escapeHtml(item.product_name || item.name || item.store_name || '')}</div>`;
+          if (item.current_stock !== undefined) {
+            html += `<div style="color: var(--text-secondary); margin-top: 2px;">Stock: <strong>${item.current_stock}</strong> units | Velocity: <strong>${item.avg_daily_sales || 0}</strong>/day | Runway: <strong>${item.days_remaining || 0}</strong> days</div>`;
+          }
+          if (item.action) {
+            html += `<div style="color: #a5b4fc; margin-top: 4px;"><strong>Recommended:</strong> ${escapeHtml(item.action)}</div>`;
+          }
+          html += `</div>`;
+        });
+        html += `</div>`;
+      }
+
+      // Recommendations list
+      if (data.recommendations && data.recommendations.length > 0) {
+        html += `<div style="margin-bottom: 12px;">`;
+        html += `<strong style="font-size: 0.78rem; text-transform: uppercase; color: #a5b4fc; letter-spacing: 0.05em;">Recommended Actions:</strong>`;
+        html += `<ul style="margin-top: 6px; padding-left: 20px; font-size: 0.84rem; color: #cbd5e1;">`;
+        data.recommendations.forEach(r => {
+          html += `<li style="margin-bottom: 4px;">${escapeHtml(r)}</li>`;
+        });
+        html += `</ul></div>`;
+      }
+
+      // Grounding Evidence Block
+      if (data.evidence && data.evidence.length > 0) {
+        html += `<div class="evidence-box">`;
+        html += `<div class="evidence-header"><span>📊</span><span>Grounding Evidence & Audit Lineage</span></div>`;
+        html += `<div style="display: flex; flex-direction: column; gap: 8px;">`;
+        data.evidence.forEach(ev => {
+          html += `<div style="border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 6px;">`;
+          html += `<span style="color: #cbd5e1; font-weight: 600;">${escapeHtml(ev.metric)}:</span> `;
+          html += `<span style="color: #67e8f9; font-weight: 700;">${escapeHtml(String(ev.value))}</span>`;
+          if (ev.source_table) {
+            html += `<div style="color: var(--text-muted); font-size: 0.74rem;">Source: ${escapeHtml(ev.source_table)} | Range: ${escapeHtml(ev.date_range || '')}</div>`;
+          }
+          if (ev.calculation) {
+            html += `<div style="color: #a5b4fc; font-size: 0.74rem; font-family: var(--font-mono);">Formula: ${escapeHtml(ev.calculation)}</div>`;
+          }
+          html += `</div>`;
+        });
+        html += `</div></div>`;
+      }
+
+      // Unsupported Limitations notice if present
+      if (data.data_limitations) {
+        html += `<div style="margin-top: 12px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 12px; font-size: 0.8rem; color: #fca5a5;">`;
+        html += `<strong>⚠️ Data Scope Limitation:</strong> ${escapeHtml(data.data_limitations)}`;
+        html += `</div>`;
+      }
+
+      assistantBubble.innerHTML = html;
+      messages.appendChild(assistantBubble);
+      messages.scrollTop = messages.scrollHeight;
+
+    } catch (err) {
+      if (loadingBubble) loadingBubble.remove();
+      const errBubble = document.createElement('div');
+      errBubble.className = 'chat-bubble chat-bubble-assistant';
+      errBubble.innerHTML = `<span style="color: #f87171;">Failed to communicate with Copilot API: ${escapeHtml(err.message)}</span>`;
+      messages.appendChild(errBubble);
+    }
+  }
+
+  function escapeHtml(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+</script>
+{% endblock %}

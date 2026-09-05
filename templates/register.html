@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Register — RetailIQ Copilot</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="auth-body">
+  <div class="auth-wrapper">
+    <div class="auth-card">
+      <div class="auth-header">
+        <div class="auth-badge">
+          <span>⚡ NexusTiQ24 • PS03</span>
+        </div>
+        <h1 class="auth-title">Create Account</h1>
+        <p class="auth-subtitle">Register Store Manager Credentials</p>
+      </div>
+
+      <!-- Flash Messages -->
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category if category != 'error' else 'danger' }}">
+              {{ message }}
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      <form action="/register" method="POST" id="registerForm">
+        <div class="form-group">
+          <label class="form-label" for="full_name">Full Name</label>
+          <input 
+            type="text" 
+            id="full_name" 
+            name="full_name" 
+            class="form-control" 
+            placeholder="e.g. John Doe" 
+            required
+            autocomplete="name"
+          >
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="email">Work Email</label>
+          <input 
+            type="email" 
+            id="email" 
+            name="email" 
+            class="form-control" 
+            placeholder="manager@mystore.com" 
+            required
+            autocomplete="email"
+          >
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="business_name">Retail Business / Store Name</label>
+          <input 
+            type="text" 
+            id="business_name" 
+            name="business_name" 
+            class="form-control" 
+            placeholder="e.g. Metro Retail Corp"
+          >
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="password">Password</label>
+          <input 
+            type="password" 
+            id="password" 
+            name="password" 
+            class="form-control" 
+            placeholder="At least 6 characters" 
+            required
+            autocomplete="new-password"
+          >
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="confirm_password">Confirm Password</label>
+          <input 
+            type="password" 
+            id="confirm_password" 
+            name="confirm_password" 
+            class="form-control" 
+            placeholder="Repeat password" 
+            required
+            autocomplete="new-password"
+          >
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 10px; padding: 12px;" id="btnRegister">
+          <span>Create Account & Get Started</span>
+          <span>→</span>
+        </button>
+      </form>
+
+      <div class="auth-footer">
+        <span>Already have an account? </span>
+        <a href="/login" style="font-weight: 600; color: #a5b4fc;" id="linkLogin">Sign in</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
